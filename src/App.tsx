@@ -52,6 +52,7 @@ import {
   type Snapshot,
 } from './lib/model';
 import Editor from './components/Editor';
+import FolderImport from './components/FolderImport';
 import Modal from './components/Modal';
 
 const navigation: { id: Page; title: string; icon: typeof Sun }[] = [
@@ -134,6 +135,7 @@ export default function App() {
   const [month, setMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(dayKey());
   const [directory, setDirectory] = useState('');
+  const [folderImport, setFolderImport] = useState(false);
   const [restorePath, setRestorePath] = useState<string | null>(null);
   const [clock, setClock] = useState(new Date());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -948,7 +950,17 @@ export default function App() {
               已归档
             </button>
           </div>
-          <span className="muted">{shown.length} 份积累 · 可用顶部搜索查找</span>
+          <div className="button-row">
+            <span className="muted">{shown.length} 份积累</span>
+            <button
+              className="button secondary"
+              disabled={!desktop}
+              title={!desktop ? '请在桌面应用中使用' : '批量收录 HTML，并扫描新增文件'}
+              onClick={() => setFolderImport(true)}
+            >
+              <FolderOpen size={16} /> 从文件夹收录
+            </button>
+          </div>
         </div>
         <Section title="值得留下的东西">
           {shown.length ? (
@@ -1347,6 +1359,16 @@ export default function App() {
             <X size={14} />
           </button>
         </div>
+      )}
+      {folderImport && (
+        <FolderImport
+          snapshot={snapshot}
+          onClose={() => setFolderImport(false)}
+          onImported={(updated, count) => {
+            setSnapshot(updated);
+            toast(`已收录或更新 ${count} 份资料`);
+          }}
+        />
       )}
       {editor && (
         <Editor

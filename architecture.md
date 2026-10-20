@@ -1,6 +1,6 @@
 # 个人助手架构
 
-更新日期：2026-10-13。产品名暂定“栖序”，版本 `0.1.0`。
+更新日期：2026-10-20。产品名“栖序”，版本 `0.1.1`。
 
 ## 当前实际状态
 
@@ -28,6 +28,7 @@
 src/
   App.tsx                  页面、应用状态、列表与项目详情、系统事件协调
   components/Editor.tsx    通用编辑、收件分流、附件选择、原始收件只读查看
+  components/FolderImport.tsx HTML 目录扫描预览、批量选择和增量收录
   components/Modal.tsx     原生 dialog，焦点管理与关闭
   lib/model.ts             领域类型、日期/搜索/下一步规则
   lib/api.ts               桌面 IPC 与明确标记的浏览器预览适配
@@ -36,6 +37,7 @@ src/
 src-tauri/
   src/lib.rs               Tauri 命令、菜单栏、全局快捷键、单实例及窗口生命周期
   src/model.rs             持久化对象和集中数据校验
+  src/folder_import.rs     HTML 标题解析、静态资源收集、去重更新与打开缓存
   src/storage.rs           SQLite 事务、附件复制、备份和恢复
   src/tests.rs             数据完整性和恢复测试（临时数据目录）
   migrations/001_initial.sql 数据库版本 1
@@ -68,7 +70,7 @@ SQLite `entries` 表以 id 为主键，kind/project_id 建索引，项目关联�
 
 ## 接口与主要数据流
 
-Tauri IPC 命令：`get_snapshot`、`save_entry`、`triage_item`、`import_attachment`、`open_attachment`、`open_link`、`create_backup`、`restore_backup`、`data_directory`。界面不直接执行 SQL。
+Tauri IPC 命令：`get_snapshot`、`save_entry`、`triage_item`、`import_attachment`、`open_attachment`、`open_link`、`create_backup`、`restore_backup`、`data_directory`、`scan_html_folder`、`import_html_files`。界面不直接执行 SQL。
 
 1. 快捷键、菜单栏或页面记录 → 保存 pending Inbox Entry。
 2. 整理对话框选择行动/项目/日程/资料，可同时创建项目首个行动、原文资料与全天日期承诺。
@@ -107,3 +109,13 @@ Tauri IPC 命令：`get_snapshot`、`save_entry`、`triage_item`、`import_attac
 - [SQLite 适用场景](https://www.sqlite.org/whentouse.html)
 
 官方文档于 2026-10-13 查阅。当前验证证据见 `current-task.md`。
+
+## HTML 文件夹收录（0.1.1）
+
+- 资料库的“从文件夹收录”提供目录选择、生成页面默认目录、再次扫描与勾选导入。上次扫描目录仅保存在本机 UI 偏好中；没有后台监听或定时扫描。
+- 仅枚举目录顶层 HTML/HTM，最多 1000 份。scraper 解析 UTF-8 标题及静态资源引用；URL 解析与 CSS url/@import 提取只读取目录内本地依赖，不执行脚本或联网。符号链接不能逃逸页面目录；缺失资源、非 UTF-8、base 地址和绝对本地资源路径显示为失败项。
+- 每个页面及依赖打包成一个 ZIP 托管附件；附件 `entryPoint` 指定 HTML 入口。打开时核验哈希与归档路径、大小，解压到独立 `html-cache/<UUID>` 后交给系统浏览器。页面包最多 500 文件、总原始大小和压缩包各不超过 25 MB；打开缓存暂未自动清理。
+- Entry 可选 `fileSource` 保存规范来源路径、内容指纹和导入附件 UUID；Attachment 可选 `entryPoint`。Serde 默认值兼容旧数据库/备份，无表结构变更。旧版应用不能读取包含新增字段的记录，不应降级。
+- 内容指纹覆盖 HTML 与依赖内容；同批/跨次重复跳过，同路径内容变化标为更新。更新默认不勾选，保留用户标题、备注、标签、项目/行动关联、归档状态及其他附件，仅替换导入附件引用。旧托管附件保留，不自动回收。
+- 导入前重新读文件与预览指纹比较，整个所选批次一次事务提交，失败清理本次新写的文件。来源元数据随完整备份保存；恢复时重映射其附件 UUID。
+- 当前不复制 HTML 中跳转到其他本地页面的导航链接、不推断 JavaScript 模块及动态加载依赖；外部资源仍需网络。搜索覆盖卡片标题/备注/标签，不包含 HTML 正文。

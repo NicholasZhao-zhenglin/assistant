@@ -5,6 +5,8 @@ use std::collections::HashSet;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Entry {
+    #[serde(default)]
+    pub file_source: Option<FileSource>,
     pub id: String,
     pub kind: String,
     pub title: String,
@@ -26,9 +28,19 @@ pub struct Entry {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileSource {
+    pub path: String,
+    pub sha256: String,
+    pub attachment_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Attachment {
+    #[serde(default)]
+    pub entry_point: Option<String>,
     pub id: String,
     pub name: String,
     pub size: u64,
@@ -49,6 +61,14 @@ pub fn valid_id(id: &str) -> bool {
 pub fn validate(s: &Snapshot) -> Result<(), String> {
     let mut ids = HashSet::new();
     for a in &s.attachments {
+        if let Some(entry) = &a.entry_point {
+            let lower = entry.to_ascii_lowercase();
+            if entry.contains(['/', '\\', '\0'])
+                || !(lower.ends_with(".html") || lower.ends_with(".htm"))
+            {
+                return Err("HTML 附件入口无效".into());
+            }
+        }
         if !valid_id(&a.id)
             || !ids.insert(a.id.clone())
             || a.name.is_empty()
@@ -111,6 +131,11 @@ pub fn validate(s: &Snapshot) -> Result<(), String> {
                 if id == &e.id || !s.entries.iter().any(|x| &x.id == id && x.kind == kind) {
                     return Err(format!("关联的 {kind} 不存在"));
                 }
+            }
+        }
+        if let Some(source) = &e.file_source {
+            if e.kind != "resource" || source.sha256.len() != 64 {
+                return Err("文件来源无效".into());
             }
         }
         if e.attachments

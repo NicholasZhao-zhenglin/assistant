@@ -1,3 +1,4 @@
+mod folder_import;
 mod model;
 mod storage;
 #[cfg(test)]
@@ -42,6 +43,20 @@ fn import_attachment(state: tauri::State<AppStore>, path: String) -> Result<Atta
     lock(&state)?.import_file(&PathBuf::from(path))
 }
 #[tauri::command]
+async fn scan_html_folder(
+    state: tauri::State<'_, AppStore>,
+    directory: String,
+) -> Result<Vec<folder_import::Candidate>, String> {
+    lock(&state)?.scan_folder(&PathBuf::from(directory))
+}
+#[tauri::command]
+async fn import_html_files(
+    state: tauri::State<'_, AppStore>,
+    selected: Vec<folder_import::Candidate>,
+) -> Result<Snapshot, String> {
+    lock(&state)?.import_html(selected)
+}
+#[tauri::command]
 fn open_attachment(state: tauri::State<AppStore>, id: String) -> Result<(), String> {
     let store = lock(&state)?;
     let a = store
@@ -50,7 +65,7 @@ fn open_attachment(state: tauri::State<AppStore>, id: String) -> Result<(), Stri
         .into_iter()
         .find(|a| a.id == id)
         .ok_or("附件不存在")?;
-    open::that(store.attachment_path(&a)).map_err(|e| e.to_string())
+    open::that(store.openable_path(&a)?).map_err(|e| e.to_string())
 }
 #[tauri::command]
 fn open_link(url: String) -> Result<(), String> {
@@ -134,6 +149,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            scan_html_folder,
+            import_html_files,
             get_snapshot,
             save_entry,
             triage_item,

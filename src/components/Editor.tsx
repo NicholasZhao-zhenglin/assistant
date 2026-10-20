@@ -144,7 +144,9 @@ export default function Editor({
                 onClick={() => api.openFile(id).catch((e) => setError(String(e)))}
               >
                 <Paperclip size={13} />
-                {snapshot.attachments.find((a) => a.id === id)?.name || '附件'}
+                {snapshot.attachments.find((a) => a.id === id)?.entryPoint ||
+                  snapshot.attachments.find((a) => a.id === id)?.name ||
+                  '附件'}
               </button>
             ))}
           </div>
@@ -373,7 +375,11 @@ export default function Editor({
           {entry.attachments.map((id) => (
             <div className="attachment" key={id}>
               <Paperclip size={14} />
-              <span>{snapshot.attachments.find((a) => a.id === id)?.name || '附件'}</span>
+              <span>
+                {snapshot.attachments.find((a) => a.id === id)?.entryPoint ||
+                  snapshot.attachments.find((a) => a.id === id)?.name ||
+                  '附件'}
+              </span>
               <button
                 type="button"
                 aria-label="移除附件关联"

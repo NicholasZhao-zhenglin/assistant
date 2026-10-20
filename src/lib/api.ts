@@ -1,5 +1,12 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { empty, validateEntry, type Attachment, type Entry, type Snapshot } from './model';
+import {
+  empty,
+  validateEntry,
+  type Attachment,
+  type Entry,
+  type Snapshot,
+  type HtmlCandidate,
+} from './model';
 export const desktop = isTauri();
 const PREVIEW_KEY = 'qixu-preview-v1';
 function preview(): Snapshot {
@@ -17,6 +24,12 @@ function validatePreview(e: Entry, s: Snapshot) {
     throw new Error('关联项目不存在');
 }
 export const api = {
+  async scanHtml(directory: string): Promise<HtmlCandidate[]> {
+    return invoke('scan_html_folder', { directory });
+  },
+  async importHtml(selected: HtmlCandidate[]): Promise<Snapshot> {
+    return invoke('import_html_files', { selected });
+  },
   async load(): Promise<Snapshot> {
     return desktop ? invoke('get_snapshot') : preview();
   },

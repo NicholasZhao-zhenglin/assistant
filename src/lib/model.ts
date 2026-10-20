@@ -1,7 +1,20 @@
 export type Kind = 'inbox' | 'project' | 'action' | 'event' | 'resource';
 export type Page =
   'today' | 'inbox' | 'projects' | 'calendar' | 'resources' | 'review' | 'settings' | 'search';
+export interface FileSource {
+  path: string;
+  sha256: string;
+  attachmentId: string;
+}
+export interface HtmlCandidate {
+  path: string;
+  title: string;
+  sha256: string;
+  status: 'new' | 'update' | 'duplicate' | 'error';
+  detail: string;
+}
 export interface Entry {
+  fileSource?: FileSource | null;
   id: string;
   kind: Kind;
   title: string;
@@ -23,6 +36,7 @@ export interface Entry {
   updatedAt: string;
 }
 export interface Attachment {
+  entryPoint?: string | null;
   id: string;
   name: string;
   size: number;

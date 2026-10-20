@@ -57,3 +57,84 @@ test('首页截图与空状态', async ({ page }) => {
   await expect(page.getByText('今天，想推进什么？')).toBeVisible();
   await page.screenshot({ path: 'test-results/today-desktop.png', fullPage: true });
 });
+
+test('文件夹收录预览、默认选择、更新与再次扫描（模拟桌面 IPC）', async ({ page }) => {
+  await page.addInitScript(() => {
+    let imported = false;
+    let selectedCount = 0;
+    const rows = [
+      {
+        path: '/fixture/new.html',
+        title: '新生成的讲解',
+        sha256: 'a'.repeat(64),
+        status: 'new',
+        detail: '1 个文件（含页面）',
+      },
+      {
+        path: '/fixture/updated.html',
+        title: '已有资料的新版本',
+        sha256: 'b'.repeat(64),
+        status: 'update',
+        detail: '2 个文件（含页面）',
+      },
+      {
+        path: '/fixture/saved.html',
+        title: '已经收录',
+        sha256: 'c'.repeat(64),
+        status: 'duplicate',
+        detail: '1 个文件（含页面）',
+      },
+      {
+        path: '/fixture/broken.html',
+        title: '缺失图片的页面',
+        sha256: '',
+        status: 'error',
+        detail: '配套文件无法读取',
+      },
+    ];
+    Object.assign(window, {
+      isTauri: true,
+      __TAURI_INTERNALS__: {
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+        transformCallback: () => 1,
+        unregisterCallback: () => {},
+        invoke: async (cmd: string, args: { selected?: typeof rows }) => {
+          if (cmd === 'get_snapshot') return { entries: [], attachments: [] };
+          if (cmd === 'data_directory') return '/fixture/data';
+          if (cmd === 'plugin:dialog|open') return '/fixture';
+          if (cmd === 'scan_html_folder')
+            return imported
+              ? rows.map((r) =>
+                  r.status === 'new' || r.status === 'update' ? { ...r, status: 'duplicate' } : r,
+                )
+              : rows;
+          if (cmd === 'import_html_files') {
+            selectedCount = args.selected?.length || 0;
+            if (selectedCount !== 2) throw new Error('测试要求新增与更新均被选中');
+            imported = true;
+            return { entries: [], attachments: [] };
+          }
+          return 1;
+        },
+      },
+      __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => {} },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('navigation').getByRole('button', { name: '资料库' }).click();
+  await page.getByRole('button', { name: '从文件夹收录' }).click();
+  await page.getByRole('button', { name: '选择文件夹', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('1 份新增 · 1 份更新 · 1 份已收录 · 1 份无法收录')).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: /新生成的讲解/ })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /已有资料的新版本/ })).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /已经收录/ })).toBeDisabled();
+  await expect(dialog.getByRole('checkbox', { name: /缺失图片/ })).toBeDisabled();
+  await dialog.getByRole('checkbox', { name: /已有资料的新版本/ }).check();
+  await page.screenshot({ path: 'test-results/folder-import.png', fullPage: true });
+  await dialog.getByRole('button', { name: '收录所选 (2)' }).click();
+  await expect(dialog.getByText(/同批重复内容自动合并/)).toBeVisible();
+  await dialog.getByRole('button', { name: '扫描新增 / 更新' }).click();
+  await expect(dialog.getByText('0 份新增 · 0 份更新 · 3 份已收录 · 1 份无法收录')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '收录所选', exact: true })).toBeDisabled();
+});

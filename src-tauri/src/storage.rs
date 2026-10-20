@@ -59,7 +59,7 @@ impl Store {
             attachments: rows(&self.conn, "SELECT data FROM attachments")?,
         })
     }
-    fn commit(&mut self, s: &Snapshot) -> Result<(), String> {
+    pub(crate) fn commit(&mut self, s: &Snapshot) -> Result<(), String> {
         validate(s)?;
         let tx = self.conn.transaction().map_err(err)?;
         tx.execute("DELETE FROM entries", []).map_err(err)?;
@@ -102,6 +102,7 @@ impl Store {
             {
                 return Err("已整理的收件保留原文，请修改整理后的记录".into());
             }
+            e.file_source = old.file_source.clone();
             e.created_at = old.created_at.clone();
             *old = e;
         } else {
@@ -152,6 +153,7 @@ impl Store {
         }
         let bytes = fs::read(path).map_err(err)?;
         let a = Attachment {
+            entry_point: None,
             id: uuid::Uuid::new_v4().to_string(),
             name: path
                 .file_name()
@@ -272,6 +274,11 @@ impl Store {
             fs::create_dir_all(dest.parent().unwrap()).map_err(err)?;
             fs::write(dest, bytes).map_err(err)?;
             for e in &mut snapshot.entries {
+                if let Some(source) = &mut e.file_source {
+                    if source.attachment_id == old.id {
+                        source.attachment_id = new_id.clone();
+                    }
+                }
                 for id in &mut e.attachments {
                     if *id == old.id {
                         *id = new_id.clone();
